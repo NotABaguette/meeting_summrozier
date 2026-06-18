@@ -71,6 +71,9 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e2b-it-qat}
       SUMMARY_LANGUAGE: ${SUMMARY_LANGUAGE:-auto}
       DIARIZATION_ENABLED: ${DIARIZATION_ENABLED:-false}
+      # In-meeting "Record & Summarize" button (Jitsi). Set JITSI_SERVER_URL.
+      JITSI_SERVER_URL: ${JITSI_SERVER_URL:-}
+      BOT_BASE_URL: http://jitsi-bot:8090
     volumes:
       - appdata:/data
       - models:/models
@@ -104,28 +107,25 @@ services:
       - appdata:/data
       - models:/models
 
-  # Auto-join Jitsi bot: point it at a room and it joins, records, and submits
-  # the meeting automatically (no manual capture/upload).
+  # Jitsi recording bot. The moderator presses the in-meeting button (served by
+  # the platform at /meet/<room>); the platform calls this bot, which joins the
+  # meeting, records it, and submits it automatically. No curl, no uploads.
   # Enable with:  docker compose --profile jitsi up -d --build
-  # Trigger:      curl -X POST http://localhost:8090/join -H 'content-type: application/json' \
-  #                    -d '{"room":"https://meet.yourco.com/YourRoom"}'
-  # Or wire a moderator button in Jitsi — see docs/JITSI-INTEGRATION.md.
   jitsi-bot:
     build: ./bot
     restart: unless-stopped
     profiles: ["jitsi"]
     shm_size: "1gb"
-    depends_on:
-      - api
     environment:
       BOT_JITSI_SERVER_URL: ${JITSI_SERVER_URL:-https://meet.example.com}
       BOT_DISPLAY_NAME: ${BOT_DISPLAY_NAME:-Meeting Summarizer}
       BOT_PLATFORM_API_URL: http://api:8000
       BOT_SUBMIT_MODE: api
       BOT_JWT: ${JITSI_JWT:-}
-      BOT_ALLOWED_ORIGINS: ${BOT_ALLOWED_ORIGINS:-*}
-    ports:
-      - "${BOT_PORT:-8090}:8090"
+    # The bot is reached internally by the platform; no published port needed.
+    # Uncomment to expose its control API directly (optional):
+    # ports:
+    #   - "${BOT_PORT:-8090}:8090"
 
   # Optional watch-folder ingester (e.g. Jitsi/Jibri drops recordings here).
   # Enable with:  docker compose --profile watch up -d

@@ -69,20 +69,21 @@ to get **best-in-class Persian** accuracy.
 | **Google Meet** | Save the Meet recording → drop in the watch folder (auto-processed). Live bot on [roadmap](docs/ROADMAP.md). | ✅ Recording |
 | **VoIP** (Asterisk/FreeSWITCH) | Per-channel call recording → watch folder (per-channel = clean speaker separation). | ✅ Recording |
 
-### Automatic Jitsi (no uploads) — point it at a meeting or add a button
+### Automatic Jitsi — press one button in the meeting (no uploads, no curl)
 
-```bash
-# 1) Set JITSI_SERVER_URL in .env, then start the bot:
-docker compose --profile jitsi up -d --build
+1. Point the platform at your Jitsi server and start the bot:
+   ```bash
+   # in .env:  JITSI_SERVER_URL=https://meet.yourcompany.com
+   docker compose --profile jitsi up -d --build
+   ```
+2. Open meetings through the platform: click **"＋ Start meeting"** in the top bar
+   (or just share `http://your-platform:8080/meet/RoomName` with attendees).
+3. During the call, press the **"🤖 Record & Summarize"** button in the Jitsi
+   toolbar. **That's it.** The bot joins, records, leaves when everyone's gone,
+   and the summary appears here automatically.
 
-# 2) Tell it to join a meeting (or wire this to a Jitsi moderator button):
-curl -X POST http://localhost:8090/join \
-  -H 'content-type: application/json' \
-  -d '{"room": "https://meet.yourcompany.com/WeeklySync"}'
-```
-The bot joins, records, leaves when everyone's gone, and the summary appears in
-the UI automatically. Full setup incl. the **"🤖 Summarize meeting" moderator
-button**: [docs/JITSI-INTEGRATION.md](docs/JITSI-INTEGRATION.md).
+Nothing to capture, upload, or curl. Full setup & a "button in your *existing*
+Jitsi" option: [docs/JITSI-INTEGRATION.md](docs/JITSI-INTEGRATION.md).
 
 ### Watch folder (for Jibri / VoIP / Meet recordings)
 

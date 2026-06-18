@@ -35,73 +35,49 @@ Start the bot (it talks to the platform internally):
 docker compose --profile jitsi up -d --build
 ```
 
-### 2. Trigger it — three ways
+### 2. Use it — just press a button (no curl)
 
-**(a) Point it at a meeting (API / script):**
-```bash
-curl -X POST http://localhost:8090/join \
-  -H 'content-type: application/json' \
-  -d '{"room": "https://meet.yourcompany.com/WeeklySync"}'
-```
-The bot joins, records, and submits. Check progress in the platform UI.
+The platform hosts your meetings with the official Jitsi UI **plus a built-in
+button**. Nobody captures or uploads anything.
 
-**(b) Moderator button inside Jitsi (External API embed) — recommended:**
-If you open meetings through your own page using Jitsi's
-[External API](https://jitsi.github.io/handbook/docs/dev-guide/dev-guide-iframe),
-add a custom toolbar button that calls the bot. Minimal working example:
+1. In the platform's top bar click **"＋ Start meeting"** (or open / share
+   `http://your-platform:8080/meet/RoomName`).
+2. The Jitsi call opens with a **"🤖 Record & Summarize"** button in the toolbar.
+3. Press it once. A confirmation appears; the bot joins, records, and submits the
+   meeting automatically. The summary shows up under **Meetings** afterwards.
 
-```html
-<script src="https://meet.yourcompany.com/external_api.js"></script>
-<div id="meet" style="height:100vh"></div>
-<script>
-  const DOMAIN = "meet.yourcompany.com";
-  const BOT_URL = "http://localhost:8090";   // where the bot is reachable
-  const roomName = "WeeklySync";
-  const ICON = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTEyIDNhOSA5IDAgMTAwIDE4IDkgOSAwIDAwMC0xOHptMCAyYTcgNyAwIDExMCAxNCA3IDcgMCAwMTAtMTR6Ii8+PC9zdmc+";
+That's the whole flow. How it works under the hood: the button calls the
+platform (same origin, `POST /api/jitsi/join`), and the platform tells the
+internal bot to join — so the bot is never exposed and there's no CORS or curl.
 
-  const api = new JitsiMeetExternalAPI(DOMAIN, {
-    roomName,
-    parentNode: document.querySelector("#meet"),
-    configOverwrite: {
-      customToolbarButtons: [
-        { id: "summarize", text: "🤖 Summarize meeting", icon: ICON }
-      ]
-    }
-  });
+### Optional: put the button in your *existing* Jitsi UI
 
-  api.addListener("customButtonPressed", ({ id }) => {
-    if (id !== "summarize") return;
-    fetch(BOT_URL + "/join", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ room: `https://${DOMAIN}/${roomName}` })
-    }).then(() => alert("✅ The meeting will be transcribed and summarized."));
-  });
-</script>
-```
-
-**(c) Moderator button in a standalone Jitsi deployment:**
-If you run the standard Jitsi web UI, add the button in your `config.js` and a
-small listener (e.g. via a custom `<script>` in your deployment's
-`base.html`/`title.html`):
+If you'd rather keep using your current Jitsi (not the platform-hosted page), add
+the button via `config.js` and forward its click to the platform:
 ```js
-// config.js
+// config.js on your Jitsi server
 config.customToolbarButtons = [
-  { id: 'summarize', text: '🤖 Summarize meeting',
+  { id: 'summarize', text: '🤖 Record & Summarize',
     icon: 'data:image/svg+xml;base64,PHN2Zy8+' }
 ];
 ```
 ```js
-// custom injected script
-window.addEventListener('message', (e) => {
-  // Jitsi emits the custom button event; forward it to the bot.
-  if (e?.data?.name === 'customButtonPressed' && e.data.id === 'summarize') {
-    fetch('http://localhost:8090/join', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ room: location.href })
-    });
-  }
+// small script injected into your Jitsi deployment
+APP.API.addListener?.('customButtonPressed', ({ id }) => {
+  if (id !== 'summarize') return;
+  fetch('http://your-platform:8080/api/jitsi/join', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ room: location.href })
+  });
 });
+```
+
+### Optional: automation (calendar bots, etc.)
+
+For unattended/scheduled recording you can call the platform endpoint directly
+(server-to-server) — no user needed:
+```
+POST http://your-platform:8080/api/jitsi/join   {"room": "RoomName"}
 ```
 
 ### How it stops automatically
@@ -109,7 +85,6 @@ window.addEventListener('message', (e) => {
 - Leaves if **nobody joins** within 5 minutes.
 - Hard cap of **`BOT_MAX_MINUTES`** (default 240) so a forgotten bot never runs
   forever.
-- You can stop it manually: `POST http://localhost:8090/sessions/{id}/stop`.
 
 ### Notes
 - **Lobby / membersOnly:** allow the bot in, or give it a JWT (`JITSI_JWT`).
@@ -149,7 +124,8 @@ step to hand the recording to the platform.
 | --- | --- |
 | Bot can't join | Check `JITSI_SERVER_URL`; allow guests or set `JITSI_JWT`; check lobby. |
 | Empty/silent recording | Confirm the bot container has PulseAudio running (it starts automatically); check `docker compose logs jitsi-bot`. |
-| Button does nothing | Verify `BOT_URL` is reachable from the browser and `BOT_ALLOWED_ORIGINS` allows your Jitsi origin (CORS). |
+| Button does nothing | Ensure the `jitsi` profile is running (`docker compose --profile jitsi ps`) and check `docker compose logs jitsi-bot`. |
+| "Could not reach the recording bot" | Start the bot: `docker compose --profile jitsi up -d`. |
 | No speaker names | Enable diarization (see [MODELS.md](MODELS.md)). |
 
 > The bot uses headless Chromium + PulseAudio + ffmpeg. It's new — validate it

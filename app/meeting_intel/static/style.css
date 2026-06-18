@@ -28,6 +28,13 @@ a:hover { text-decoration: underline; }
   background: rgba(76, 201, 160, .12); color: var(--accent-2);
   border: 1px solid rgba(76,201,160,.35); padding: 6px 12px; border-radius: 999px; font-size: 13px;
 }
+.nav { display: flex; gap: 16px; align-items: center; }
+.nav a { color: var(--muted); font-size: 14px; }
+.nav a:hover { color: var(--text); }
+.nav .nav-cta {
+  background: var(--accent); color: #fff; padding: 6px 12px; border-radius: 8px;
+}
+.nav .nav-cta:hover { filter: brightness(1.1); text-decoration: none; }
 .container { max-width: 960px; margin: 0 auto; padding: 24px; }
 .footer { text-align: center; color: var(--muted); padding: 24px; font-size: 13px; }
 .card {

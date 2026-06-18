@@ -12,6 +12,7 @@ from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from .. import __version__
@@ -40,6 +41,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Self-hosted Meeting Intelligence", version=__version__, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+# Allow the optional "button in your existing Jitsi" page (which lives on the
+# Jitsi origin) to call /api/jitsi/join. Scoped to your Jitsi origin only.
+_cors_origins = [get_settings().jitsi_server_url] if get_settings().jitsi_server_url else []
+if _cors_origins:
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_methods=["POST", "GET"],
+        allow_headers=["*"],
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -88,6 +102,68 @@ def meeting_page(request: Request, meeting_id: str):
     return templates.TemplateResponse(
         request, "detail.html", {"m": data, "settings": get_settings()}
     )
+
+
+# --------------------------------------------------------------------------- #
+# Jitsi: host a meeting with a built-in "Record & Summarize" button
+# --------------------------------------------------------------------------- #
+class JitsiJoinRequest(BaseModel):
+    room: str
+
+
+def _jitsi_room_url(settings, room: str) -> str:
+    room = (room or "").strip()
+    if room.startswith("http://") or room.startswith("https://"):
+        return room
+    base = settings.jitsi_server_url.rstrip("/")
+    return f"{base}/{room}" if base else room
+
+
+@app.get("/meet", response_class=HTMLResponse)
+def meet_launcher(request: Request):
+    return templates.TemplateResponse(
+        request, "meet_launcher.html", {"settings": get_settings()}
+    )
+
+
+@app.get("/meet/{room}", response_class=HTMLResponse)
+def meet_room(request: Request, room: str):
+    settings = get_settings()
+    if not settings.jitsi_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Jitsi is not configured. Set JITSI_SERVER_URL to enable hosted meetings.",
+        )
+    return templates.TemplateResponse(
+        request,
+        "meet.html",
+        {
+            "settings": settings,
+            "room": room,
+            "jitsi_domain": settings.jitsi_domain,
+            "button_label": settings.jitsi_button_label,
+        },
+    )
+
+
+@app.post("/api/jitsi/join")
+def jitsi_join(req: JitsiJoinRequest):
+    """Called by the in-meeting button. Tells the bot to join + record."""
+    settings = get_settings()
+    room_url = _jitsi_room_url(settings, req.room)
+    if not room_url:
+        raise HTTPException(status_code=400, detail="room is required")
+    import httpx
+
+    try:
+        resp = httpx.post(f"{settings.bot_base_url}/join", json={"room": room_url}, timeout=15)
+        resp.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach the recording bot. Is the 'jitsi' profile running? ({exc})",
+        )
+    return resp.json()
 
 
 # --------------------------------------------------------------------------- #

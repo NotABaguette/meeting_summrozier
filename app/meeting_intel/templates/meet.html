@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ room }} · Meeting</title>
+  <style>html, body, #meet { height: 100%; margin: 0; background: #040404; }</style>
+  <script src="https://{{ jitsi_domain }}/external_api.js"></script>
+</head>
+<body>
+  <div id="meet"></div>
+  <script>
+    const domain = "{{ jitsi_domain }}";
+    const room = {{ room|tojson }};
+    const label = {{ button_label|tojson }};
+    // Simple robot/record icon.
+    const ICON = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iNiIgZmlsbD0iI2ZmNWY1ZiIvPjwvc3ZnPg==";
+
+    const api = new JitsiMeetExternalAPI(domain, {
+      roomName: room,
+      parentNode: document.getElementById("meet"),
+      configOverwrite: {
+        customToolbarButtons: [{ id: "summarize", text: label, icon: ICON }]
+      }
+    });
+
+    let triggered = false;
+    api.addListener("customButtonPressed", ({ id }) => {
+      if (id !== "summarize" || triggered) return;
+      triggered = true;
+      notify("⏳ Starting recording…");
+      fetch("/api/jitsi/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ room })
+      })
+        .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(() => notify("✅ Recording. The summary will appear in Meeting Intelligence after the meeting."))
+        .catch(() => { triggered = false; notify("❌ Could not start recording. Tell your admin."); });
+    });
+
+    function notify(msg) {
+      try {
+        api.executeCommand("showNotification", {
+          title: "Meeting Intelligence", description: msg, timeout: "long"
+        });
+      } catch (e) { alert(msg); }
+    }
+  </script>
+</body>
+</html>

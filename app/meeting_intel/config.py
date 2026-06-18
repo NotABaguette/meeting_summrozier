@@ -109,6 +109,28 @@ class Settings(BaseSettings):
     watch_folder_path: Path = Path("/data/incoming")
     watch_folder_poll_seconds: float = 10.0
 
+    # ----- Jitsi (in-meeting "Record & Summarize" button) -----------------
+    # Your Jitsi server base URL, e.g. https://meet.yourcompany.com
+    # When set, the platform hosts meetings with a built-in record button.
+    jitsi_server_url: str = ""
+    # Internal URL the platform uses to reach the bot (never exposed to browsers).
+    bot_base_url: str = "http://jitsi-bot:8090"
+    # Text shown on the in-meeting button.
+    jitsi_button_label: str = "🤖 Record & Summarize"
+
+    @property
+    def jitsi_domain(self) -> str:
+        """Host portion of jitsi_server_url (what external_api.js needs)."""
+        url = self.jitsi_server_url.strip()
+        if not url:
+            return ""
+        url = url.split("://", 1)[-1]
+        return url.split("/", 1)[0]
+
+    @property
+    def jitsi_enabled(self) -> bool:
+        return bool(self.jitsi_domain)
+
     # ----- Uploads ---------------------------------------------------------
     max_upload_mb: int = 2048
     allowed_audio_extensions: tuple[str, ...] = (

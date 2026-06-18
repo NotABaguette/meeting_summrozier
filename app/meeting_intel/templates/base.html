@@ -9,6 +9,10 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/">🗣️ Meeting Intelligence</a>
+    <nav class="nav">
+      <a href="/">Meetings</a>
+      {% if settings and settings.jitsi_enabled %}<a href="/meet" class="nav-cta">＋ Start meeting</a>{% endif %}
+    </nav>
     <span class="badge-private" title="All processing happens on your servers. No data leaves your network.">
       🔒 100% on-prem · no data leaves your network
     </span>

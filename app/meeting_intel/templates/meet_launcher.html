@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Start a meeting · Meeting Intelligence{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Start or join a meeting</h2>
+  {% if settings.jitsi_enabled %}
+    <p class="muted">
+      Opens your Jitsi meeting with a built-in
+      <strong>{{ settings.jitsi_button_label }}</strong> button. Press it once
+      during the call and the meeting is recorded and summarized automatically —
+      nothing else to do.
+    </p>
+    <form class="upload" onsubmit="goToRoom(event)">
+      <input type="text" id="room" placeholder="Room name (e.g. WeeklySync)" required>
+      <button type="submit">Open meeting →</button>
+    </form>
+    <p class="muted" style="margin-top:12px">
+      Tip: share <code>{{ request.base_url }}meet/RoomName</code> with attendees so
+      everyone joins through this page.
+    </p>
+  {% else %}
+    <p class="muted">
+      Hosted meetings are not configured yet. Set <code>JITSI_SERVER_URL</code> in
+      your <code>.env</code> and start the bot with
+      <code>docker compose --profile jitsi up -d</code>. See
+      <a href="https://github.com">docs/JITSI-INTEGRATION.md</a>.
+    </p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  function goToRoom(e) {
+    e.preventDefault();
+    const r = document.getElementById('room').value.trim();
+    if (r) window.location.href = '/meet/' + encodeURIComponent(r);
+  }
+</script>
+{% endblock %}
