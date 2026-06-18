@@ -1,0 +1,15 @@
+# Core runtime dependencies (CPU-friendly).
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+python-multipart>=0.0.9
+jinja2>=3.1,<4.0
+sqlalchemy>=2.0,<3.0
+psycopg[binary]>=3.1,<4.0
+pydantic>=2.6,<3.0
+pydantic-settings>=2.2,<3.0
+httpx>=0.27,<1.0
+
+# Speech-to-text. Runs on CPU (int8) or a small GPU. PyAV (bundled) handles
+# audio/video decoding, so no system ffmpeg is strictly required.
+# >=1.1.0 is required for the "large-v3-turbo" model.
+faster-whisper>=1.1.0

@@ -1,0 +1,12 @@
+# OPTIONAL: speaker diarization ("who said what" on single-stream recordings).
+# Heavy (pulls in PyTorch). Install only if you set DIARIZATION_ENABLED=true.
+#
+# For CPU-only or a small GPU, the CPU build of torch is usually fine:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-diarization.txt
+#
+# You also need a (free) HuggingFace token and must accept the model terms at
+# https://huggingface.co/pyannote/speaker-diarization-3.1  (one-time, online).
+pyannote.audio>=3.1,<4.0
+torch>=2.1
+torchaudio>=2.1

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Meeting Intelligence{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">🗣️ Meeting Intelligence</a>
+    <span class="badge-private" title="All processing happens on your servers. No data leaves your network.">
+      🔒 100% on-prem · no data leaves your network
+    </span>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <span>Self-hosted meeting intelligence · faster-whisper + Ollama · runs entirely in your datacenter</span>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

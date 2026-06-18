@@ -1,0 +1,14 @@
+[project]
+name = "meeting-intel"
+version = "0.1.0"
+description = "Self-hosted, fully offline meeting transcription and summarization platform"
+requires-python = ">=3.10"
+readme = "../README.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

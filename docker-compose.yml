@@ -1,0 +1,154 @@
+# Self-hosted Meeting Intelligence — full stack, runs entirely on your servers.
+#
+#   cp .env.example .env      # (optional) tweak models/settings
+#   docker compose up -d      # builds + starts everything, pulls the LLM
+#   open http://localhost:8080
+#
+# Everything below stays inside this Docker network. The ONLY outbound traffic
+# is a one-time model download (LLM + Whisper weights) during first start.
+# For a fully air-gapped install see docs/SECURITY-PRIVACY.md.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-meeting}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meeting}
+      POSTGRES_DB: ${POSTGRES_DB:-meeting}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-meeting}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+    # ---- GPU (optional): uncomment to use an NVIDIA GPU for the LLM ----
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # One-shot: pulls the summarization model into Ollama on first start.
+  model-init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'until ollama list >/dev/null 2>&1; do echo "waiting for ollama..."; sleep 2; done;
+         ollama pull ${OLLAMA_MODEL:-gemma4:e2b-it-qat}'
+    restart: "no"
+
+  api:
+    build: ./app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-meeting}:${POSTGRES_PASSWORD:-meeting}@db:5432/${POSTGRES_DB:-meeting}
+      OLLAMA_BASE_URL: http://ollama:11434
+      DATA_DIR: /data
+      MODEL_CACHE_DIR: /models
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3-turbo}
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-fa}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-auto}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e2b-it-qat}
+      SUMMARY_LANGUAGE: ${SUMMARY_LANGUAGE:-auto}
+      DIARIZATION_ENABLED: ${DIARIZATION_ENABLED:-false}
+    volumes:
+      - appdata:/data
+      - models:/models
+    ports:
+      - "${HTTP_PORT:-8080}:8000"
+
+  worker:
+    build: ./app
+    restart: unless-stopped
+    command: python -m meeting_intel.worker
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-meeting}:${POSTGRES_PASSWORD:-meeting}@db:5432/${POSTGRES_DB:-meeting}
+      OLLAMA_BASE_URL: http://ollama:11434
+      DATA_DIR: /data
+      MODEL_CACHE_DIR: /models
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3-turbo}
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-fa}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-auto}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-auto}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e2b-it-qat}
+      SUMMARY_LANGUAGE: ${SUMMARY_LANGUAGE:-auto}
+      DIARIZATION_ENABLED: ${DIARIZATION_ENABLED:-false}
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
+      AUDIO_RETENTION_DAYS: ${AUDIO_RETENTION_DAYS:-0}
+    volumes:
+      - appdata:/data
+      - models:/models
+
+  # Auto-join Jitsi bot: point it at a room and it joins, records, and submits
+  # the meeting automatically (no manual capture/upload).
+  # Enable with:  docker compose --profile jitsi up -d --build
+  # Trigger:      curl -X POST http://localhost:8090/join -H 'content-type: application/json' \
+  #                    -d '{"room":"https://meet.yourco.com/YourRoom"}'
+  # Or wire a moderator button in Jitsi — see docs/JITSI-INTEGRATION.md.
+  jitsi-bot:
+    build: ./bot
+    restart: unless-stopped
+    profiles: ["jitsi"]
+    shm_size: "1gb"
+    depends_on:
+      - api
+    environment:
+      BOT_JITSI_SERVER_URL: ${JITSI_SERVER_URL:-https://meet.example.com}
+      BOT_DISPLAY_NAME: ${BOT_DISPLAY_NAME:-Meeting Summarizer}
+      BOT_PLATFORM_API_URL: http://api:8000
+      BOT_SUBMIT_MODE: api
+      BOT_JWT: ${JITSI_JWT:-}
+      BOT_ALLOWED_ORIGINS: ${BOT_ALLOWED_ORIGINS:-*}
+    ports:
+      - "${BOT_PORT:-8090}:8090"
+
+  # Optional watch-folder ingester (e.g. Jitsi/Jibri drops recordings here).
+  # Enable with:  docker compose --profile watch up -d
+  ingest:
+    build: ./app
+    restart: unless-stopped
+    profiles: ["watch"]
+    command: python -m meeting_intel.ingest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-meeting}:${POSTGRES_PASSWORD:-meeting}@db:5432/${POSTGRES_DB:-meeting}
+      DATA_DIR: /data
+      WATCH_FOLDER_ENABLED: "true"
+      WATCH_FOLDER_PATH: /data/incoming
+    volumes:
+      - appdata:/data
+      # Drop recordings into ./recordings on the host to auto-process them.
+      - ./recordings:/data/incoming
+
+volumes:
+  pgdata:
+  ollama:
+  appdata:
+  models:

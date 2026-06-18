@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ m.title }} · Meeting Intelligence{% endblock %}
+{% block content %}
+{% if m.status in ['queued', 'processing'] %}
+<meta http-equiv="refresh" content="5">
+{% endif %}
+
+<a href="/" class="btn-link">← all meetings</a>
+<h1>{{ m.title }}</h1>
+<p class="meta-line">
+  <span class="status status-{{ m.status }}">{{ m.status }}{% if m.progress and m.status=='processing' %} · {{ m.progress }}{% endif %}</span>
+  <span class="tag">{{ m.source }}</span>
+  {% if m.language %}<span class="tag">{{ m.language }}</span>{% endif %}
+  {% if m.duration_seconds %}<span class="muted">{{ (m.duration_seconds // 60)|int }}m {{ (m.duration_seconds % 60)|int }}s</span>{% endif %}
+</p>
+
+{% if m.status == 'failed' %}
+  <div class="card error"><strong>Processing failed.</strong><br>{{ m.error }}</div>
+{% elif m.status in ['queued', 'processing'] %}
+  <div class="card">
+    <p>This meeting is being processed locally… (this page refreshes automatically)</p>
+    <div class="spinner"></div>
+  </div>
+{% else %}
+  {% set s = m.summary or {} %}
+  <div class="downloads">
+    <a class="button" href="/api/meetings/{{ m.id }}/minutes.md">⬇ Minutes (.md)</a>
+    <a class="button" href="/api/meetings/{{ m.id }}/transcript.md">⬇ Transcript (.md)</a>
+    <a class="button" href="/api/meetings/{{ m.id }}/transcript.txt">⬇ Transcript (.txt)</a>
+  </div>
+
+  <section class="card">
+    <h2>Executive summary</h2>
+    <p>{{ s.executive_summary or "Not available." }}</p>
+  </section>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Key points</h2>
+      {% if s.key_points %}<ul>{% for p in s.key_points %}<li>{{ p }}</li>{% endfor %}</ul>
+      {% else %}<p class="muted">None recorded.</p>{% endif %}
+    </section>
+    <section class="card">
+      <h2>Decisions</h2>
+      {% if s.decisions %}<ul>{% for d in s.decisions %}<li>{{ d }}</li>{% endfor %}</ul>
+      {% else %}<p class="muted">None recorded.</p>{% endif %}
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Action items</h2>
+    {% if s.action_items %}
+    <table class="meetings">
+      <thead><tr><th>Owner</th><th>Action</th><th>Due</th></tr></thead>
+      <tbody>
+      {% for a in s.action_items %}
+        <tr><td>{{ a.owner or "—" }}</td><td>{{ a.task }}</td><td>{{ a.due or "—" }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">None recorded.</p>{% endif %}
+  </section>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Topics discussed</h2>
+      {% if s.topics %}<ul>{% for t in s.topics %}<li>{{ t }}</li>{% endfor %}</ul>
+      {% else %}<p class="muted">None recorded.</p>{% endif %}
+    </section>
+    <section class="card">
+      <h2>Next steps</h2>
+      {% if s.next_steps %}<ul>{% for n in s.next_steps %}<li>{{ n }}</li>{% endfor %}</ul>
+      {% else %}<p class="muted">None recorded.</p>{% endif %}
+    </section>
+  </div>
+
+  {% if s.journal %}
+  <section class="card">
+    <h2>Meeting journal</h2>
+    {% for j in s.journal %}
+      <h3>{{ j.heading }}</h3>
+      <p>{{ j.details }}</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Transcript</h2>
+    {% if m.segments %}
+    <div class="transcript">
+      {% for seg in m.segments %}
+        <div class="utterance">
+          {% if seg.speaker %}<span class="speaker">{{ seg.speaker }}</span>{% endif %}
+          <span class="ts">{{ '%02d:%02d:%02d'|format((seg.start // 3600)|int, ((seg.start % 3600)//60)|int, (seg.start % 60)|int) }}</span>
+          <span class="text">{{ seg.text }}</span>
+        </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">No transcript available.</p>{% endif %}
+  </section>
+{% endif %}
+
+<section class="card danger-zone">
+  <button class="button danger" onclick="deleteMeeting('{{ m.id }}')">Delete this meeting &amp; its audio</button>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/app.js"></script>
+{% endblock %}
